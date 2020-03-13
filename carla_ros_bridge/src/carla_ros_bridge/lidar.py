@@ -10,7 +10,9 @@
 Classes to handle Carla lidars
 """
 
-import numpy
+import threading
+
+import numpy, math
 
 import tf
 
@@ -43,6 +45,16 @@ class Lidar(Sensor):
                                     synchronous_mode=synchronous_mode,
                                     prefix='lidar/' + carla_actor.attributes.get('role_name'))
 
+        # store the disordered lidar measurement
+        self.required_scan = 0
+        self.received_lidar_data = {}
+        self.aggregated_lidar_data = []
+        self.aggregated_angle = 0
+        self.max_delay = 3
+
+        # used for multi-thread syncronization
+        self.mutex = threading.Lock()
+
     def get_ros_transform(self, transform=None):
         """
         Function (override) to modify the tf messages sent by this lidar.
@@ -74,8 +86,14 @@ class Lidar(Sensor):
         :param carla_lidar_measurement: carla lidar measurement object
         :type carla_lidar_measurement: carla.LidarMeasurement
         """
+
+        # this function may be executed on different thread
+        self.mutex.acquire()
+        
+        #header = self.get_msg_header(timestamp=stamp)
         header = self.get_msg_header()
 
+        # convert the raw data into numpy
         lidar_data = numpy.frombuffer(
             carla_lidar_measurement.raw_data, dtype=numpy.float32)
         lidar_data = numpy.reshape(
@@ -87,6 +105,43 @@ class Lidar(Sensor):
         lidar_data = -lidar_data
         # we also need to permute x and y
         lidar_data = lidar_data[..., [1, 0, 2]]
-        point_cloud_msg = create_cloud_xyz32(header, lidar_data)
-        self.publish_message(
-            self.get_topic_prefix() + "/point_cloud", point_cloud_msg)
+
+        # check the scan id if is we want
+        scan = carla_lidar_measurement.scan
+        scan_angle = carla_lidar_measurement.horizontal_end_angle - carla_lidar_measurement.horizontal_angle
+        if self.required_scan ==0 or len(self.received_lidar_data) > self.max_delay:
+            self.required_scan = scan + 1
+            self.aggregated_lidar_data = [lidar_data]
+            self.aggregated_angle = scan_angle
+            self.received_lidar_data = {}
+            print("drop")
+        elif self.required_scan == scan:
+            self.required_scan = scan + 1 # set required scan to next scan
+            self.aggregated_lidar_data.append(lidar_data) # append current scan
+            self.aggregated_angle += scan_angle
+        else:
+            self.received_lidar_data[scan] = (scan_angle, lidar_data) # store current frame for later use
+        
+        # we should publish if the aggregated angle is close 2pi
+        should_publish = True
+        while self.aggregated_angle < math.pi*2 - math.radians(3):
+            if self.received_lidar_data.has_key(self.required_scan):
+                (history_scan_angle, history_lidar_data) = self.received_lidar_data.pop(self.required_scan)
+                self.aggregated_lidar_data.append(history_lidar_data)
+                self.aggregated_angle += history_scan_angle
+                self.required_scan += 1
+            else:
+                should_publish = False
+                break
+
+        #print(scan, scan_angle, len(self.received_lidar_data), len(self.aggregated_lidar_data))
+        
+        # if enough data aggregated, send it
+        if should_publish:
+            point_cloud_msg = create_cloud_xyz32(header, numpy.vstack(self.aggregated_lidar_data))
+            self.publish_message(self.get_topic_prefix() + "/point_cloud", point_cloud_msg)
+            self.aggregated_angle = 0
+            self.aggregated_lidar_data = []
+
+        # release the lock so other thread may call this function
+        self.mutex.release()
