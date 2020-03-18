@@ -1,9 +1,9 @@
 #pragma once
-#include "real_client_sensor.h"
 
 namespace ros_bridge {
 
-class EgoCar : public RealClientSensor<EgoCar> {
+template <typename _Derived>
+class SensorBase {
  public:
  protected:
 };

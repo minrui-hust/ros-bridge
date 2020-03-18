@@ -1,12 +1,13 @@
 #pragma once
-
 #include "actor_base.h"
-#include "ros/ros.h"
+#include "carla/client/Actor.h"
 
 namespace ros_bridge {
 
+using CarlaActorPtr = carla::SharedPtr<carla::client::Actor>;
+
 template <typename _Derived>
-class PseudoActor : public ActorBase<_Derived> {
+class RealActor : public ActorBase<_Derived> {
  public:
  protected:
 };

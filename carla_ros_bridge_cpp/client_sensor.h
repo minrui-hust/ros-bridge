@@ -1,12 +1,10 @@
 #pragma once
-
-#include "actor_base.h"
-#include "ros/ros.h"
+#include "sensor_base.h"
 
 namespace ros_bridge {
 
 template <typename _Derived>
-class PseudoActor : public ActorBase<_Derived> {
+class ClientSensor : public SensorBase<_Derived> {
  public:
  protected:
 };
