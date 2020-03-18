@@ -16,7 +16,7 @@ import numpy, math
 
 import tf
 
-from sensor_msgs.point_cloud2 import create_cloud_xyz32
+from sensor_msgs.point_cloud2 import create_cloud, PointField
 
 from carla_ros_bridge.sensor import Sensor
 import carla_ros_bridge.transforms as trans
@@ -44,6 +44,11 @@ class Lidar(Sensor):
                                     communication=communication,
                                     synchronous_mode=synchronous_mode,
                                     prefix='lidar/' + carla_actor.attributes.get('role_name'))
+        
+        self.fields = [PointField('x', 0, PointField.FLOAT32, 1),
+                       PointField('y', 4, PointField.FLOAT32, 1),
+                       PointField('z', 8, PointField.FLOAT32, 1),
+                       PointField('i', 12,PointField.UINT32 , 1)]
 
         # store the disordered lidar measurement
         self.required_scan = 0
@@ -97,14 +102,14 @@ class Lidar(Sensor):
         lidar_data = numpy.frombuffer(
             carla_lidar_measurement.raw_data, dtype=numpy.float32)
         lidar_data = numpy.reshape(
-            lidar_data, (int(lidar_data.shape[0] / 3), 3))
+            lidar_data, (int(lidar_data.shape[0] / 4), 4))
         # we take the oposite of y axis
         # (as lidar point are express in left handed coordinate system, and ros need right handed)
         # we need a copy here, because the data are read only in carla numpy
         # array
-        lidar_data = -lidar_data
+        lidar_data = numpy.hstack([-lidar_data[...,[1, 0, 2]], lidar_data[...,[3]]])
         # we also need to permute x and y
-        lidar_data = lidar_data[..., [1, 0, 2]]
+        #lidar_data = lidar_data[..., [1, 0, 2, 3]]
 
         # check the scan id if is we want
         scan = carla_lidar_measurement.scan
@@ -134,11 +139,11 @@ class Lidar(Sensor):
                 should_publish = False
                 break
 
-        #print(scan, scan_angle, len(self.received_lidar_data), len(self.aggregated_lidar_data))
+        print(self.aggregated_angle, scan, scan_angle, len(self.received_lidar_data), len(self.aggregated_lidar_data))
         
         # if enough data aggregated, send it
         if should_publish:
-            point_cloud_msg = create_cloud_xyz32(header, numpy.vstack(self.aggregated_lidar_data))
+            point_cloud_msg = create_cloud(header, self.fields, numpy.vstack(self.aggregated_lidar_data))
             self.publish_message(self.get_topic_prefix() + "/point_cloud", point_cloud_msg)
             self.aggregated_angle = 0
             self.aggregated_lidar_data = []
