@@ -184,6 +184,7 @@ class CarlaEgoVehicle(object):
             try:
                 bp = bp_library.find(str(sensor_spec['type']))
                 bp.set_attribute('role_name', str(sensor_spec['id']))
+                attachment_type = carla.AttachmentType.Rigid # default to be rigid
                 if sensor_spec['type'].startswith('sensor.camera'):
                     bp.set_attribute('image_size_x', str(sensor_spec['width']))
                     bp.set_attribute('image_size_y', str(sensor_spec['height']))
@@ -197,6 +198,8 @@ class CarlaEgoVehicle(object):
                     sensor_rotation = carla.Rotation(pitch=sensor_spec['pitch'],
                                                      roll=sensor_spec['roll'],
                                                      yaw=sensor_spec['yaw'])
+                    if 'attachment_type' in sensor_spec and str(sensor_spec['attachment_type']) == 'spring_arm':
+                        attachment_type = carla.AttachmentType.SpringArm
                     if sensor_spec['type'].startswith('sensor.camera.rgb'):
                         bp.set_attribute('gamma', str(sensor_spec['gamma']))
                         bp.set_attribute('shutter_speed', str(sensor_spec['shutter_speed']))
@@ -312,7 +315,8 @@ class CarlaEgoVehicle(object):
             # create sensor
             sensor_transform = carla.Transform(sensor_location, sensor_rotation)
             sensor = self.world.spawn_actor(bp, sensor_transform,
-                                            attach_to=self.player)
+                                            attach_to=self.player,
+                                            attachment_type=attachment_type)
             actors.append(sensor)
         return actors
 
