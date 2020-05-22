@@ -162,6 +162,7 @@ class KeyboardControl(object):
         self._autopilot_enabled = False
         self._control = CarlaEgoVehicleControl()
         self._steer_cache = 0.0
+        self._throttle_cache = 0.0
 
         self.vehicle_control_manual_override_publisher = rospy.Publisher(
             "/carla/{}/vehicle_control_manual_override".format(self.role_name),
@@ -253,15 +254,31 @@ class KeyboardControl(object):
         """
         parse key events
         """
-        self._control.throttle = 1.0 if keys[K_UP] or keys[K_w] else 0.0
-        steer_increment = 5e-4 * milliseconds
+        throttle_increment = 2e-4 * milliseconds
+        if keys[K_UP] or keys[K_w]:
+            self._throttle_cache += throttle_increment
+        else:
+            if self._throttle_cache > throttle_increment:
+                self._throttle_cache -= throttle_increment
+            else:
+                self._throttle_cache = 0.0
+        self._throttle_cache = min(0.7, self._throttle_cache)
+
+        steer_increment = 2e-4 * milliseconds
         if keys[K_LEFT] or keys[K_a]:
             self._steer_cache -= steer_increment
         elif keys[K_RIGHT] or keys[K_d]:
             self._steer_cache += steer_increment
         else:
-            self._steer_cache = 0.0
+            if self._steer_cache > steer_increment:
+                self._steer_cache -= steer_increment
+            elif self._steer_cache < -steer_increment:
+                self._steer_cache += steer_increment
+            else:
+                self._steer_cache = 0.0
         self._steer_cache = min(0.7, max(-0.7, self._steer_cache))
+                
+        self._control.throttle = self._throttle_cache
         self._control.steer = round(self._steer_cache, 1)
         self._control.brake = 1.0 if keys[K_DOWN] or keys[K_s] else 0.0
         self._control.hand_brake = keys[K_SPACE]

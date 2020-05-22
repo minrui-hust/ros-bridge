@@ -1,13 +1,13 @@
 {
     "sensors": [
         {
-            "type": "sensor.lidar.depth",
-            "id": "velodyne64",
+            "type": "sensor.lidar.ray_cast",
+            "id": "velodyne32",
             "x": 0.0, "y": 0.0, "z": 2.0, "roll": 0.0, "pitch": 0.0, "yaw": 0.0,
             "range": 100,
-            "channels": 64,
+            "channels": 32,
             "points_per_second": 18000,
-            "upper_fov": 10.0,
+            "upper_fov": 15.0,
             "lower_fov": -25.0,
             "rotation_frequency": 10,
             "verticle_angles": "",
